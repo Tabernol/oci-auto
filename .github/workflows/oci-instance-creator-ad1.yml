@@ -7,7 +7,7 @@ on:
   workflow_dispatch: # Можна запустити вручну
 
 env:
-  INSTANCE_NAME: a1-ad1
+  INSTANCE_NAME: krasiot-ui
   OCI_AVAILABILITY_DOMAIN: roRp:PHX-AD-1
 
 jobs:
@@ -81,7 +81,8 @@ jobs:
                   print(f"Instance ID: {existing_instances[0].id}")
                   print(f"Lifecycle State: {existing_instances[0].lifecycle_state}")
                   print(f"⏹️  Пропускаю створення. Вимкніть цей workflow!")
-                  sys.exit(0)
+                  # Вихід з помилкою щоб отримати повідомлення на пошту
+                  sys.exit(1) 
           
               # Перевірка інстансів що створюються
               creating_instances = compute_client.list_instances(
