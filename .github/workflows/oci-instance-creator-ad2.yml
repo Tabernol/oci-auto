@@ -1,4 +1,4 @@
-name: OCI A1 Instance Creator
+name: OCI A1 Instance Creator AD2
 
 on:
   schedule:
