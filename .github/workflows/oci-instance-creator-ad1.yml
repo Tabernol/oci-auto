@@ -41,10 +41,13 @@ jobs:
           chmod 600 ~/.oci/key.pem
 
       - name: Try to create A1 instance
+        env:
+          SSH_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
         run: |
           python3 << 'EOF'
           import oci
           import sys
+          import os
           from datetime import datetime
           
           print(f"[{datetime.now()}] Спроба створити A1 інстанс...")
@@ -59,7 +62,7 @@ jobs:
           availability_domain = "${{ env.OCI_AVAILABILITY_DOMAIN }}"
           subnet_id = "${{ secrets.OCI_SUBNET_OCID }}"
           image_id = "${{ secrets.OCI_IMAGE_OCID }}"
-          ssh_public_key = "${{ secrets.SSH_PUBLIC_KEY }}"
+          ssh_public_key = os.environ.get('SSH_KEY', '')
           
           # Конфігурація shape
           shape_config = oci.core.models.LaunchInstanceShapeConfigDetails(
