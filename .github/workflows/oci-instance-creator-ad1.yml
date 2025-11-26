@@ -1,0 +1,121 @@
+name: OCI A1 Instance Creator
+
+on:
+  schedule:
+    # Запускається кожні 10 хвилин
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Можна запустити вручну
+
+env:
+  INSTANCE_NAME: a1-ad1
+  OCI_AVAILABILITY_DOMAIN: roRp:PHX-AD-1
+
+jobs:
+  create-instance:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install OCI CLI
+        run: |
+          pip install oci-cli
+
+      - name: Create OCI Config
+        run: |
+          mkdir -p ~/.oci
+          echo "[DEFAULT]" > ~/.oci/config
+          echo "user=${{ secrets.OCI_USER_OCID }}" >> ~/.oci/config
+          echo "fingerprint=${{ secrets.OCI_FINGERPRINT }}" >> ~/.oci/config
+          echo "tenancy=${{ secrets.OCI_TENANCY_OCID }}" >> ~/.oci/config
+          echo "region=${{ secrets.OCI_REGION }}" >> ~/.oci/config
+          echo "key_file=~/.oci/key.pem" >> ~/.oci/config
+          
+          echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/key.pem
+          chmod 600 ~/.oci/key.pem
+
+      - name: Try to create A1 instance
+        run: |
+          python3 << 'EOF'
+          import oci
+          import sys
+          from datetime import datetime
+          
+          print(f"[{datetime.now()}] Спроба створити A1 інстанс...")
+          
+          # Ініціалізація OCI config
+          config = oci.config.from_file("~/.oci/config", "DEFAULT")
+          compute_client = oci.core.ComputeClient(config)
+          
+          # Параметри інстансу
+          instance_name = "${{ env.INSTANCE_NAME }}"
+          compartment_id = "${{ secrets.OCI_COMPARTMENT_OCID }}"
+          availability_domain = "${{ env.OCI_AVAILABILITY_DOMAIN }}"
+          subnet_id = "${{ secrets.OCI_SUBNET_OCID }}"
+          image_id = "${{ secrets.OCI_IMAGE_OCID }}"
+          ssh_public_key = "${{ secrets.SSH_PUBLIC_KEY }}"
+          
+          # Конфігурація shape
+          shape_config = oci.core.models.LaunchInstanceShapeConfigDetails(
+              ocpus=1.0,
+              memory_in_gbs=6.0
+          )
+          
+          # Деталі інстансу
+          instance_details = oci.core.models.LaunchInstanceDetails(
+              availability_domain=availability_domain,
+              compartment_id=compartment_id,
+              shape="VM.Standard.A1.Flex",
+              shape_config=shape_config,
+              display_name=instance_name,
+              source_details=oci.core.models.InstanceSourceViaImageDetails(
+                  image_id=image_id,
+                  source_type="image"
+              ),
+              create_vnic_details=oci.core.models.CreateVnicDetails(
+                  subnet_id=subnet_id,
+                  assign_public_ip=True
+              ),
+              metadata={
+                  "ssh_authorized_keys": ssh_public_key
+              }
+          )
+          
+          try:
+              # Спроба створити інстанс
+              response = compute_client.launch_instance(instance_details)
+          
+              print(f"✅ УСПІХ! Інстанс створено!")
+              print(f"Instance ID: {response.data.id}")
+              print(f"Lifecycle State: {response.data.lifecycle_state}")
+          
+              sys.exit(0)
+          
+          except oci.exceptions.ServiceError as e:
+              if e.status == 500 and "Out of host capacity" in str(e):
+                  print(f"❌ Немає capacity. Спробую знову через 10 хвилин...")
+                  sys.exit(0)  # Не фейлимо workflow
+              elif "NotAuthorizedOrNotFound" in str(e):
+                  print(f"❌ Помилка авторизації або ресурс не знайдено")
+                  print(f"Деталі: {e}")
+                  sys.exit(1)
+              else:
+                  print(f"❌ Помилка: {e}")
+                  sys.exit(1)
+          
+          except Exception as e:
+              print(f"❌ Несподівана помилка: {e}")
+              sys.exit(1)
+          EOF
+        continue-on-error: false
+
+      - name: Notification on success
+        if: success()
+        run: |
+          echo "🎉 Workflow виконано успішно!"
