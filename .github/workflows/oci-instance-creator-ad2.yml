@@ -2,8 +2,8 @@ name: OCI A1 Instance Creator AD2
 
 on:
   schedule:
-    # Запускається кожні 10 хвилин
-    - cron: '*/10 * * * *'
+    # Запускається кожні 0 хвилин
+    - cron: '0 * * * *'
   workflow_dispatch: # Можна запустити вручну
 
 env:
